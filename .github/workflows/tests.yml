@@ -48,12 +48,16 @@ jobs:
           OCI_SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
         run: |
           echo "★自動連打テスト：オラクルへの接続を試みます..."
+          # CPUとメモリの指定方法をオラクルの最新仕様（JSON形式）に完全修正しました
           ~/.local/bin/oci compute instance launch \
-            --availability-domain "$(~/.local/bin/oci iam availability-domain list --compartment-id "$OCI_COMPARTMENT_OCID" --query "data[0].name" --raw-output)" \
+            --availability-domain "$(~/.local/bin/oci iam availability-domain list --compartment-id "$OCI_COMPARTMENT_OCID" --query "data.name" --raw-output | head -n 1)" \
             --compartment-id "$OCI_COMPARTMENT_OCID" \
             --shape "VM.Standard.A1.Flex" \
-            --ocpus 4 \
-            --memory-in-gbs 24 \
+            --shape-config '{"ocpus":4,"memoryInGbs":24}' \
+            --assign-public-ip true \
+            --subnet-id "$OCI_SUBNET_OCID" \
+            --image-id "$(~/.local/bin/oci compute image list --compartment-id "$OCI_COMPARTMENT_OCID" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" --shape "VM.Standard.A1.Flex" --query "data[0].id" --raw-output)"
+
             --assign-public-ip true \
             --subnet-id "$OCI_SUBNET_OCID" \
             --image-id "$(~/.local/bin/oci compute image list --compartment-id "$OCI_COMPARTMENT_OCID" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" --shape "VM.Standard.A1.Flex" --query "data[0].id" --raw-output)"
