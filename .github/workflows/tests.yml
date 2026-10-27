@@ -13,7 +13,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. 外部からダウンロードせず、GitHub標準の安全なツールボックスからオラクル公式ツールを直接呼び出します
       - name: Write OCI Config and Key
         env:
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
@@ -37,19 +36,24 @@ jobs:
           region=$OCI_REGION
           EOF
 
-      # 2. Ubuntuに最初から入っているパッケージ管理システムを使って安全にインストールします
       - name: Install OCI CLI Safely
         run: |
           sudo apt-get update -y && sudo apt-get install -y python3-pip
           pip3 install oci-cli --break-system-packages
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      # 3. オラクルへ無料サーバーの作成申請（自動連打）を送信します
       - name: Run Launch Command
         env:
           OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
           OCI_SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
         run: |
           echo "★自動連打テスト：オラクルへの接続を試みます..."
-          ~/.local/bin/oci compute instance launch --availability-domain "Uocm:AP-OSAKA-1-AD-1" --compartment-id "$OCI_COMPARTMENT_OCID" --shape "VM.Standard.A1.Flex" --shape-config '{"ocpus":4,"memoryInGbs":24}' --assign-public-ip true --subnet-id "$OCI_SUBNET_OCID" --image-id "ocid1.image.oc1.ap-osaka-1.aaaaaaaahf7mx6zstb6rshq6v567skx4v45y3mshq6tqshq6v567skx4v45y" 2>&1
-
+          ~/.local/bin/oci compute instance launch \
+            --availability-domain "$(~/.local/bin/oci iam availability-domain list --compartment-id "$OCI_COMPARTMENT_OCID" --query "data[0].name" --raw-output)" \
+            --compartment-id "$OCI_COMPARTMENT_OCID" \
+            --shape "VM.Standard.A1.Flex" \
+            --ocpus 4 \
+            --memory-in-gbs 24 \
+            --assign-public-ip true \
+            --subnet-id "$OCI_SUBNET_OCID" \
+            --image-id "$(~/.local/bin/oci compute image list --compartment-id "$OCI_COMPARTMENT_OCID" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" --shape "VM.Standard.A1.Flex" --query "data[0].id" --raw-output)"
