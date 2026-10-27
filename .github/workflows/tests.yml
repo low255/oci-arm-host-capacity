@@ -46,18 +46,23 @@ jobs:
         env:
           OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
           OCI_SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
+          OCI_SSH_PUBLIC_KEY: ${{ vars.OCI_SSH_PUBLIC_KEY }}
         run: |
           echo "★自動連打テスト：オラクルへの接続を試みます..."
-          # CPUとメモリの指定方法をオラクルの最新仕様（JSON形式）に完全修正しました
+          
+          # SSH公開鍵を一時ファイルに保存
+          echo "$OCI_SSH_PUBLIC_KEY" >  ~/ssh_key.pub
+          
+          # 自動的に一番最初のAD（データセンターのエリア）と、最新のUbuntu22.04イメージを取得して作成を申請します
+          AD_NAME=$(~/.local/bin/oci iam availability-domain list --compartment-id "$OCI_COMPARTMENT_OCID" --query "data[0].name" --raw-output)
+          IMAGE_ID=$(~/.local/bin/oci compute image list --compartment-id "$OCI_COMPARTMENT_OCID" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" --shape "VM.Standard.A1.Flex" --query "data[0].id" --raw-output)
+          
           ~/.local/bin/oci compute instance launch \
-            --availability-domain "$(~/.local/bin/oci iam availability-domain list --compartment-id "$OCI_COMPARTMENT_OCID" --query "data.name" --raw-output | head -n 1)" \
+            --availability-domain "$AD_NAME" \
             --compartment-id "$OCI_COMPARTMENT_OCID" \
             --shape "VM.Standard.A1.Flex" \
             --shape-config '{"ocpus":4,"memoryInGbs":24}' \
             --assign-public-ip true \
             --subnet-id "$OCI_SUBNET_OCID" \
-            --image-id "$(~/.local/bin/oci compute image list --compartment-id "$OCI_COMPARTMENT_OCID" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" --shape "VM.Standard.A1.Flex" --query "data[0].id" --raw-output)"
-
-            --assign-public-ip true \
-            --subnet-id "$OCI_SUBNET_OCID" \
-            --image-id "$(~/.local/bin/oci compute image list --compartment-id "$OCI_COMPARTMENT_OCID" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" --shape "VM.Standard.A1.Flex" --query "data[0].id" --raw-output)"
+            --image-id "$IMAGE_ID" \
+            --ssh-authorized-keys-file ~/ssh_key.pub 2>&1
