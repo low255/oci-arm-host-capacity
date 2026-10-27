@@ -25,7 +25,8 @@ jobs:
 
       - name: Install OCI CLI
         run: |
-          curl -L -O https://githubusercontent.com
+          # 途切れない安全な公式のインストールスクリプトを使用します
+          curl -L https://githubusercontent.com -o install.sh
           chmod +x install.sh
           ./install.sh --accept-all-defaults
           echo "$HOME/bin" >> $GITHUB_PATH
@@ -43,14 +44,17 @@ jobs:
           echo "$OCI_KEY_CONTENT" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
           
+          # 正しいフィンガープリント（合言葉の指紋）を自動計算して設定ファイルを生成
+          FINGERPRINT=$(openssl rsa -pubout -outform DER < ~/.oci/oci_api_key.pem 2>/dev/null | openssl md5 -c 2>/dev/null | awk '{print $2}')
+          
           cat << EOF > ~/.oci/config
           [DEFAULT]
           user=$OCI_USER_OCID
-          fingerprint=dummy_fingerprint_will_be_resolved_by_cli
+          fingerprint=$FINGERPRINT
           key_file=~/.oci/oci_api_key.pem
           tenancy=$OCI_TENANCY_OCID
           region=$OCI_REGION
           EOF
           
           echo "★自動連打テスト：オラクルへの接続を試みます..."
-          # ここに実際の確保コマンドを追記、またはhitrovツールのコアをキックします
+          $HOME/bin/oci compute instance launch --availability-domain "Uocm:AP-OSAKA-1-AD-1" --compartment-id "$OCI_COMPARTMENT_OCID" --shape "VM.Standard.A1.Flex" --shape-config '{"ocpus":4,"memoryInGbs":24}' --assign-public-ip true --subnet-id "$OCI_SUBNET_OCID" --image-id "ocid1.image.oc1.ap-osaka-1.aaaaaaaahf7mx6zstb6rshq6v567skx4v45y3mshq6tqshq6v567skx4v45y" 2>&1
