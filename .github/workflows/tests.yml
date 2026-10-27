@@ -13,30 +13,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Cache for OCI CLI
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.oci
-            ~/.oracle-cli
-          key: ${{ runner.os }}-oci-cli-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-oci-cli-
-
-      - name: Install OCI CLI
-        run: |
-          # 途切れない安全な公式のインストールスクリプトを使用します
-          curl -L https://githubusercontent.com -o install.sh
-          chmod +x install.sh
-          ./install.sh --accept-all-defaults
-          echo "$HOME/bin" >> $GITHUB_PATH
-
-      - name: Run Test Launch
+      # 1. 外部からダウンロードせず、GitHub標準の安全なツールボックスからオラクル公式ツールを直接呼び出します
+      - name: Write OCI Config and Key
         env:
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
           OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
-          OCI_SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
           OCI_KEY_CONTENT: ${{ secrets.OCI_KEY_CONTENT }}
           OCI_REGION: ${{ vars.OCI_REGION }}
         run: |
@@ -44,7 +26,6 @@ jobs:
           echo "$OCI_KEY_CONTENT" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
           
-          # 正しいフィンガープリント（合言葉の指紋）を自動計算して設定ファイルを生成
           FINGERPRINT=$(openssl rsa -pubout -outform DER < ~/.oci/oci_api_key.pem 2>/dev/null | openssl md5 -c 2>/dev/null | awk '{print $2}')
           
           cat << EOF > ~/.oci/config
@@ -55,6 +36,20 @@ jobs:
           tenancy=$OCI_TENANCY_OCID
           region=$OCI_REGION
           EOF
-          
+
+      # 2. Ubuntuに最初から入っているパッケージ管理システムを使って安全にインストールします
+      - name: Install OCI CLI Safely
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y python3-pip
+          pip3 install oci-cli --break-system-packages
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # 3. オラクルへ無料サーバーの作成申請（自動連打）を送信します
+      - name: Run Launch Command
+        env:
+          OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          OCI_SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
+        run: |
           echo "★自動連打テスト：オラクルへの接続を試みます..."
-          $HOME/bin/oci compute instance launch --availability-domain "Uocm:AP-OSAKA-1-AD-1" --compartment-id "$OCI_COMPARTMENT_OCID" --shape "VM.Standard.A1.Flex" --shape-config '{"ocpus":4,"memoryInGbs":24}' --assign-public-ip true --subnet-id "$OCI_SUBNET_OCID" --image-id "ocid1.image.oc1.ap-osaka-1.aaaaaaaahf7mx6zstb6rshq6v567skx4v45y3mshq6tqshq6v567skx4v45y" 2>&1
+          ~/.local/bin/oci compute instance launch --availability-domain "Uocm:AP-OSAKA-1-AD-1" --compartment-id "$OCI_COMPARTMENT_OCID" --shape "VM.Standard.A1.Flex" --shape-config '{"ocpus":4,"memoryInGbs":24}' --assign-public-ip true --subnet-id "$OCI_SUBNET_OCID" --image-id "ocid1.image.oc1.ap-osaka-1.aaaaaaaahf7mx6zstb6rshq6v567skx4v45y3mshq6tqshq6v567skx4v45y" 2>&1
+
