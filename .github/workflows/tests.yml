@@ -3,7 +3,9 @@ name: Tests
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *'  # ここを 30 に変更します
+    # 渋滞しやすい0分や30分を避け、中途半端な時間を複数指定して起動確率を上げます
+    - cron: '2,32 * * * *'
+    - cron: '17,47 * * * *'
 
 
 jobs:
